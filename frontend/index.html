@@ -1,0 +1,214 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Stock Price Predictor</title>
+    <script src="https://cdn.plot.ly/plotly-2.27.0.min.js"></script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+        
+        .container {
+            max-width: 1000px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 12px;
+            padding: 30px;
+            box-shadow: 0 10px 40px rgba(0,0,0,0.2);
+        }
+        
+        h1 {
+            color: #333;
+            margin-bottom: 10px;
+            text-align: center;
+        }
+        
+        .subtitle {
+            text-align: center;
+            color: #666;
+            margin-bottom: 30px;
+        }
+        
+        .input-group {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 30px;
+            flex-wrap: wrap;
+        }
+        
+        select, input, button {
+            padding: 12px;
+            font-size: 16px;
+            border-radius: 6px;
+            border: 1px solid #ddd;
+        }
+        
+        select, input {
+            flex: 1;
+            min-width: 150px;
+        }
+        
+        button {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            cursor: pointer;
+            font-weight: bold;
+            transition: transform 0.2s;
+        }
+        
+        button:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(102, 126, 234, 0.4);
+        }
+        
+        button:active {
+            transform: translateY(0);
+        }
+        
+        .loading {
+            text-align: center;
+            color: #667eea;
+            font-weight: bold;
+            margin: 20px 0;
+        }
+        
+        .error {
+            background: #fee;
+            color: #c33;
+            padding: 15px;
+            border-radius: 6px;
+            margin: 20px 0;
+        }
+        
+        .metrics {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+            gap: 15px;
+            margin-bottom: 30px;
+        }
+        
+        .metric-card {
+            background: #f9f9f9;
+            padding: 15px;
+            border-radius: 8px;
+            border-left: 4px solid #667eea;
+        }
+        
+        .metric-label {
+            font-size: 12px;
+            color: #666;
+            text-transform: uppercase;
+        }
+        
+        .metric-value {
+            font-size: 24px;
+            font-weight: bold;
+            color: #667eea;
+            margin-top: 5px;
+        }
+        
+        #chart {
+            width: 100%;
+            height: 500px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>📈 Stock Price Predictor</h1>
+        <p class="subtitle">AI-powered stock price forecasting with LSTM</p>
+        
+        <div class="input-group">
+            <select id="symbol">
+                <option value="AAPL">Apple (AAPL)</option>
+                <option value="GOOGL">Google (GOOGL)</option>
+                <option value="TSLA">Tesla (TSLA)</option>
+                <option value="MSFT">Microsoft (MSFT)</option>
+                <option value="AMZN">Amazon (AMZN)</option>
+            </select>
+            <button onclick="predictStock()">🚀 Predict Price</button>
+        </div>
+        
+        <div id="loading" class="loading" style="display: none;">
+            Training model... This may take a minute ⏳
+        </div>
+        
+        <div id="error" class="error" style="display: none;"></div>
+        
+        <div id="metrics" class="metrics"></div>
+        <div id="chart"></div>
+    </div>
+
+    <script>
+  const API_URL = 'http://127.0.0.1:5000/api/predict';
+
+  async function predictStock() {
+    const symbol = document.getElementById('symbol').value;
+    const loadingDiv = document.getElementById('loading');
+    const errorDiv = document.getElementById('error');
+    const metricsDiv = document.getElementById('metrics');
+
+    loadingDiv.style.display = 'block';
+    errorDiv.style.display = 'none';
+    metricsDiv.innerHTML = '';
+
+    try {
+      const response = await fetch(API_URL, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ symbol })
+      });
+      const data = await response.json();
+      if (!response.ok || data.status === 'error') {
+        throw new Error(data.error || `Request failed (${response.status})`);
+      }
+
+      metricsDiv.innerHTML = `
+        <div class="metric-card">
+          <div class="metric-label">Last Close (${data.last_date})</div>
+          <div class="metric-value">$${data.last_close.toFixed(2)}</div>
+        </div>
+        <div class="metric-card">
+          <div class="metric-label">Model RMSE</div>
+          <div class="metric-value">$${data.rmse.toFixed(2)}</div>
+        </div>
+        <div class="metric-card">
+          <div class="metric-label">Naive RMSE</div>
+          <div class="metric-value">$${data.naive_rmse.toFixed(2)}</div>
+        </div>
+        <div class="metric-card">
+          <div class="metric-label">Model MAE</div>
+          <div class="metric-value">$${data.mae.toFixed(2)}</div>
+        </div>
+      `;
+
+      Plotly.newPlot('chart', [
+        { x: data.dates, y: data.actual, mode: 'lines', name: 'Actual' },
+        { x: data.dates, y: data.predicted, mode: 'lines', name: 'Predicted' }
+      ], {
+        title: `${data.symbol}: actual vs predicted (test period)`,
+        yaxis: { title: 'Price ($)' },
+        hovermode: 'x unified'
+      });
+    } catch (error) {
+      errorDiv.textContent = `❌ ${error.message}`;
+      errorDiv.style.display = 'block';
+    } finally {
+      loadingDiv.style.display = 'none';
+    }
+  }
+</script>
+</body>
+</html>
